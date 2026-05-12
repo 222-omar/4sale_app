@@ -143,7 +143,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     owner = UserSerializer(read_only=True)
     owner_profile = serializers.SerializerMethodField()
     images = ProductImageSerializer(many=True, read_only=True)
-    auction = AuctionSerializer(read_only=True)
+    auction = AuctionDetailSerializer(read_only=True)
     
     class Meta:
         model = Product
