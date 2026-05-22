@@ -30,8 +30,13 @@ def _embed_in_background(product_id):
     try:
         from marketplace.models import Product
         from rag.embeddings import embed_product
+        from rag.vector_search import get_embedding_cache
         product = Product.objects.get(id=product_id)
+        logger.info(f"[Signal] Generating visual embedding for new product {product_id}")
         embed_product(product)
+        logger.info(f"[Signal] Successfully saved embedding for product {product_id}")
+        # Invalidate in-memory cache so next search picks up the new product
+        get_embedding_cache().invalidate()
     except Exception as e:
         logger.error(f"[RAG/Signal] Failed to embed product #{product_id}: {e}")
     finally:

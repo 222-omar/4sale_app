@@ -61,11 +61,11 @@ def rag_query(query: str, user=None, request=None, history: list = None) -> dict
 
         final_state = agent.invoke(initial_state)
 
-        answer = final_state.get("final_response", {
-            "summary": "حصلت مشكلة تقنية. جرب تاني بعد شوية.",
+        answer = final_state.get("final_response") or {
+            "summary": "مش لاقي نتيجة مطابقة. جرب تغير كلمة البحث أو دور في فئة تانية 🔍",
             "items": [],
-            "suggested_action": "view_listing",
-        })
+            "suggested_action": "set_agent",
+        }
         products_data = final_state.get("products_data", [])
         sql_count = final_state.get("sql_count", 0)
         vector_count = final_state.get("vector_count", 0)

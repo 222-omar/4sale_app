@@ -31,6 +31,7 @@ class _SellScreenState extends ConsumerState<SellScreen> {
   DateTime? _auctionEnd;
   final List<XFile> _images = [];
   String? _aiCategory;
+  String? _aiDetectedClass;
   String? _aiDetectedClassAr;
   bool _isAnalyzingImage = false;
   bool _loading = false;
@@ -93,6 +94,7 @@ class _SellScreenState extends ConsumerState<SellScreen> {
           final result = await ClassifyService.classifyImage(_images.first.path);
           setState(() {
             _aiCategory = result['category']?.toString();
+            _aiDetectedClass = result['detected_class']?.toString();
             _aiDetectedClassAr = result['detected_class_ar']?.toString();
             if (_aiCategory != null && _aiCategory != 'other') {
               final match = _categories.where((c) => c['id'].toString() == _aiCategory).firstOrNull;
@@ -137,6 +139,26 @@ class _SellScreenState extends ConsumerState<SellScreen> {
       return;
     }
 
+    // Validate auction end time
+    if (_isAuction && _auctionEnd == null) {
+      AppSnackbar.error(
+        context,
+        ref.read(languageProvider).locale == 'ar'
+            ? 'يرجى اختيار وقت انتهاء المزاد'
+            : 'Please select an auction end time',
+      );
+      return;
+    }
+    if (_isAuction && _auctionEnd != null && _auctionEnd!.isBefore(DateTime.now().add(const Duration(minutes: 10)))) {
+      AppSnackbar.error(
+        context,
+        ref.read(languageProvider).locale == 'ar'
+            ? 'وقت انتهاء المزاد يجب أن يكون بعد 10 دقائق على الأقل'
+            : 'Auction end time must be at least 10 minutes from now',
+      );
+      return;
+    }
+
     setState(() { _loading = true; _error = null; });
     try {
       await ProductsService.create(
@@ -150,6 +172,7 @@ class _SellScreenState extends ConsumerState<SellScreen> {
         isAuction: _isAuction,
         auctionEndTime: _auctionEnd?.toIso8601String(),
         imagePaths: _images.map((x) => x.path).toList(),
+        detectedItem: _aiDetectedClass,
       );
       if (mounted) {
         final type = _isAuction ? 'auction' : 'store';
@@ -606,8 +629,9 @@ class _SellScreenState extends ConsumerState<SellScreen> {
             leading: const Icon(Icons.calendar_today_rounded, color: AppColors.primary600),
             title: Text(dict['auctionEndTime'] as String,
                 style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.w600)),
-            subtitle: Text(_auctionEnd?.toString() ??
-                (lang.locale == 'ar' ? 'اختر وقت الانتهاء' : 'Select End Time'),
+            subtitle: Text(_auctionEnd != null
+                ? _auctionEnd!.toLocal().toString()
+                : (lang.locale == 'ar' ? 'اختر وقت الانتهاء' : 'Select End Time'),
                 style: TextStyle(fontSize: 12.sp, color: AppColors.slate400)),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
             onTap: () async {
@@ -619,8 +643,12 @@ class _SellScreenState extends ConsumerState<SellScreen> {
               if (date != null && mounted) {
                 final time = await showTimePicker(context: context, initialTime: TimeOfDay.now());
                 if (time != null) {
-                  setState(() => _auctionEnd = DateTime(
-                      date.year, date.month, date.day, time.hour, time.minute));
+                  // Create local DateTime then convert to UTC so the backend
+                  // receives an ISO-8601 string with the Z suffix and stores
+                  // the correct instant regardless of server timezone.
+                  final local = DateTime(
+                      date.year, date.month, date.day, time.hour, time.minute);
+                  setState(() => _auctionEnd = local.toUtc());
                 }
               }
             },

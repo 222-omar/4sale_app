@@ -79,9 +79,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   }
 
   void _startAuctionTimer(String endTimeStr) {
-    final endTime = DateTime.parse(endTimeStr);
+    final endTime = DateTime.parse(endTimeStr).toUtc();
     _auctionTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      final diff = endTime.difference(DateTime.now());
+      final diff = endTime.difference(DateTime.now().toUtc());
       if (diff.isNegative) {
         setState(() {
           _timeLeft = ref.read(languageProvider).locale == 'ar'

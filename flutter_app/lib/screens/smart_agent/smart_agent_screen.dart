@@ -91,11 +91,26 @@ class _SmartAgentScreenState extends ConsumerState<SmartAgentScreen> {
           SnackBar(content: const Text('✅ تمت المزايدة بنجاح!'), backgroundColor: AppColors.successGreen),
         );
       }
-    } catch (e) {
+    } on Exception catch (e) {
       if (mounted) {
+        final msg = e.toString();
+        // Check for the specific "bid expired/outbid" 400 error from Django
+        final isExpired = msg.contains('لم يعد صالحاً') ||
+            msg.contains('expired') ||
+            msg.contains('400');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ فشل: $e'), backgroundColor: AppColors.errorRed),
+          SnackBar(
+            content: Text(
+              isExpired
+                  ? '⚡ انتهت صلاحية هذه المزايدة — تجاوزها مزايد آخر. تم إلغاؤها تلقائياً.'
+                  : '❌ فشل: ${msg.replaceAll('Exception: ', '')}',
+            ),
+            backgroundColor: isExpired ? AppColors.warningAmber : AppColors.errorRed,
+            duration: const Duration(seconds: 4),
+          ),
         );
+        // Refresh to remove the expired bid from the list
+        _fetchAll();
       }
     }
   }
@@ -129,24 +144,36 @@ class _SmartAgentScreenState extends ConsumerState<SmartAgentScreen> {
           ),
           centerTitle: true,
           actions: [
+            IconButton(
+              icon: const Icon(Icons.notifications_rounded, color: AppColors.slate800),
+              onPressed: () => context.push('/notifications'),
+            ),
             if (_pendingBids.isNotEmpty)
               Padding(
-                padding: EdgeInsets.only(left: 8.w, right: 8.w),
-                child: Stack(
-                  alignment: Alignment.topRight,
-                  children: [
-                    const Icon(Icons.pending_actions_rounded, color: AppColors.warningAmber),
-                    Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: const BoxDecoration(color: AppColors.errorRed, shape: BoxShape.circle),
-                      child: Text(
-                        '${_pendingBids.length}',
-                        style: TextStyle(color: Colors.white, fontSize: 9.sp, fontWeight: FontWeight.w800),
+                padding: EdgeInsets.only(left: 8.w, right: 16.w),
+                child: Center(
+                  child: Stack(
+                    alignment: Alignment.topRight,
+                    clipBehavior: Clip.none,
+                    children: [
+                      Icon(Icons.pending_actions_rounded, color: AppColors.warningAmber, size: 24.w),
+                      Positioned(
+                        right: -4,
+                        top: -4,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: AppColors.errorRed, shape: BoxShape.circle),
+                          child: Text(
+                            '${_pendingBids.length}',
+                            style: TextStyle(color: Colors.white, fontSize: 10.sp, fontWeight: FontWeight.w800),
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
+            if (_pendingBids.isEmpty) SizedBox(width: 8.w),
           ],
         ),
         floatingActionButton: _loading

@@ -58,8 +58,8 @@ class ChatService {
         ApiConstants.chatSessionSend(sessionId),
         data: {'query': query},
         options: Options(
-          sendTimeout: const Duration(seconds: 60),
-          receiveTimeout: const Duration(seconds: 60),
+          sendTimeout: const Duration(seconds: 90),
+          receiveTimeout: const Duration(seconds: 90),
         ),
       );
       return response.data as Map<String, dynamic>;

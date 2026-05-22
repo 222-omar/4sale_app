@@ -65,19 +65,31 @@ class ProductsService {
     bool isAuction = false,
     String? auctionEndTime,
     List<String>? imagePaths,
+    String? detectedItem,
   }) async {
     try {
-      final formData = FormData.fromMap({
+      // Build form fields — omit nulls so Django doesn't receive 'null' strings
+      final fields = <String, dynamic>{
         'title': title,
         'description': description,
-        'price': price,
+        'price': price.toString(),
         'category': category,
         'condition': condition,
         'location': location,
-        'phone_number': phoneNumber,
-        'is_auction': isAuction,
-        'auction_end_time': auctionEndTime,
-      });
+        'is_auction': isAuction.toString(),
+      };
+      if (phoneNumber != null && phoneNumber.isNotEmpty) {
+        fields['phone_number'] = phoneNumber;
+      }
+      // Only include auction_end_time when it's set AND is_auction is true
+      if (isAuction && auctionEndTime != null) {
+        fields['auction_end_time'] = auctionEndTime;
+      }
+      if (detectedItem != null && detectedItem.isNotEmpty) {
+        fields['detected_item'] = detectedItem;
+      }
+
+      final formData = FormData.fromMap(fields);
 
       if (imagePaths != null) {
         for (final path in imagePaths) {

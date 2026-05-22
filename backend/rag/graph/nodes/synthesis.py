@@ -26,18 +26,22 @@ SYNTHESIS_PROMPT = ChatPromptTemplate.from_messages([
 القواعد:
 1. اتكلم عامية مصرية طبيعية (مش فصحى). مثال: "لقيتلك" مش "وجدت لك".
 2. متألفش معلومات أبداً — استخدم بس اللي في النتايج.
-3. قاعدة ذكية للمطابقة:
+3. قاعدة ذكية للمطابقة (مهمة جداً):
    - "دراعات بلاستيشن" = "جاك بلاستيشن" = "controller" (نفس المنتج!)
-   - لو المنتج بديل أو من نفس الفصيلة → متطابق
-   - بس لو الكاتيجوري مختلفة خالص (تلاجة vs غسالة) → استبعده
-4. لو مفيش نتائج مطابقة، أو لو المستخدم بيسأل سؤال عام ملوش علاقة بالمنتجات: جاوب عليه بشكل طبيعي وودي كبوت ذكي، بس فكره بذوق إن تخصصك الأساسي هو البيع والشراء في 4Sale، وفي الحالتين رجع items فارغة [].
+   - "كراسي للقعده" = "كرسي" = "chair" = "كرسي خشب/بلاستيك/مكتب" (نفس الفصيلة!)
+   - لو المنتج بديل أو من نفس الفصيلة أو من نفس الكاتيجوري → متطابق
+   - ⚠️ كن متسامح في المطابقة — لو فيه أي تشابه في النوع أو الاستخدام → حطه في items
+   - بس لو الكاتيجوري مختلفة خالص (تلاجة vs غسالة، موبايل vs عربية) → استبعده
+4. لو فيه نتائج متاحة: حاول دايمًا تلاقي مطابقة ولو جزئية — متسيبش القايمة فاضية.
+   لو مفيش نتائج خالص في context: جاوب بشكل ودي وقول إنك مش لاقي حاجة وخلي items=[].
 5. اذكر السعر والحالة والمكان.
 6. لو البائع تقييمه >= 4: اذكر "بائع موثوق ⭐"
 7. لو فيه مزاد: قول "عليه مزاد! 🔥"
 8. خلي الملخص مختصر (3-5 جمل).
-9. ⚠️ في items، حط بس IDs المنتجات اللي فعلاً مطابقة — لو مفيش مطابق خلي القايمة فاضية []."""),
+9. ⚠️ في items، حط IDs المنتجات المطابقة أو القريبة — تجنب القايمة الفاضية لو فيه نتائج متاحة."""),
     ("user", "طلب المستخدم: {query}\n\nالنتائج المتاحة:\n{context}")
 ])
+
 
 
 def synthesis_node(state: AgentState) -> dict:
@@ -169,8 +173,16 @@ def _apply_guardrails(synthesis: dict, valid_ids: set, retry: int) -> dict:
             "next_step": "retry",
             "final_response": None,  # Explicitly clear old response
         }
-        
+
+    # Guardrail 3: Last-resort fallback — if LLM still returns 0 after retry,
+    # force-include all valid IDs so the user sees something useful.
+    if not filtered_ids and valid_ids:
+        logger.warning(f"[Guardrail] LLM returned 0 items after retry — force-including {len(valid_ids)} results")
+        synthesis["items"] = list(valid_ids)
+        synthesis["summary"] = synthesis.get("summary", "") or "لقيتلك بعض النتايج اللي ممكن تفيدك 👇"
+
     return None
+
 
 
 def _build_products_data(item_ids: list, fused: list) -> list:

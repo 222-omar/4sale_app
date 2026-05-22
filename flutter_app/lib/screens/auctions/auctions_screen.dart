@@ -77,8 +77,8 @@ class _AuctionsScreenState extends ConsumerState<AuctionsScreen>
       final endStr = a['end_time']?.toString();
       if (endStr == null) return false;
       try {
-        final end = DateTime.parse(endStr);
-        final remaining = end.difference(DateTime.now());
+        final end = DateTime.parse(endStr).toUtc();
+        final remaining = end.difference(DateTime.now().toUtc());
         return !remaining.isNegative && remaining.inHours < 6;
       } catch (_) {
         return false;
@@ -407,9 +407,9 @@ class _PremiumAuctionCardState extends State<_PremiumAuctionCard>
     final endStr = widget.auction['end_time'] as String?;
     if (endStr == null) return;
     try {
-      final endTime = DateTime.parse(endStr);
+      final endTime = DateTime.parse(endStr).toUtc();
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        final diff = endTime.difference(DateTime.now());
+        final diff = endTime.difference(DateTime.now().toUtc());
         if (diff.isNegative) {
           setState(() {
             _timeLeft = widget.isAr ? 'انتهى' : 'Ended';

@@ -191,11 +191,18 @@ def chat_session_send_view(request, session_id):
             'meta': {},
         }
 
+    # Normalise answer — may be None if final_response was cleared by guardrail retry
+    answer = result.get('answer') or {
+        'summary': 'مش لاقي نتيجة مطابقة. جرب تغير كلمة البحث أو دور في فئة تانية 🔍',
+        'items': [],
+        'suggested_action': 'set_agent',
+    }
+
     # Save assistant message
     assistant_msg = ChatMessage.objects.create(
         session=session,
         role='assistant',
-        content=result.get('answer', {}).get('summary', ''),
+        content=answer.get('summary', ''),
         products_data=result.get('products_data', []),
         meta=result.get('meta', {}),
     )
@@ -205,7 +212,7 @@ def chat_session_send_view(request, session_id):
 
     return Response({
         'message_id': assistant_msg.id,
-        'answer': result.get('answer', {}),
+        'answer': answer,
         'products_data': result.get('products_data', []),
         'meta': result.get('meta', {}),
     }, status=status.HTTP_200_OK)

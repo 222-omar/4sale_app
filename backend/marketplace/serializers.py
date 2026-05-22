@@ -556,7 +556,7 @@ class ProductCreateSerializer(serializers.ModelSerializer):
             'id', 'title', 'description', 'price', 'category', 'condition', 
             'status', 'location', 'phone_number', 'is_auction',
             'auction_end_time', 'images', 'uploaded_images',
-            'created_at', 'updated_at'
+            'created_at', 'updated_at', 'detected_item'
         ]
         read_only_fields = ['id', 'status', 'created_at', 'updated_at']
     
@@ -573,11 +573,23 @@ class ProductCreateSerializer(serializers.ModelSerializer):
             # Create Auction if is_auction and end_time provided
             # Auction starts NOW (at creation time)
             if product.is_auction and product.auction_end_time:
+                # Server-side validation: reject end_time in the past
+                now = timezone.now()
+                if product.auction_end_time <= now:
+                    product.delete()
+                    raise serializers.ValidationError({
+                        "auction_end_time": "وقت انتهاء المزاد يجب أن يكون في المستقبل"
+                    })
+                if product.auction_end_time < now + timezone.timedelta(minutes=5):
+                    product.delete()
+                    raise serializers.ValidationError({
+                        "auction_end_time": "وقت انتهاء المزاد يجب أن يكون بعد 5 دقائق على الأقل"
+                    })
                 auction = Auction.objects.create(
                     product=product,
                     starting_bid=product.price,
                     current_bid=product.price,
-                    start_time=timezone.now(),
+                    start_time=now,
                     end_time=product.auction_end_time,
                     is_active=True
                 )
@@ -592,49 +604,57 @@ class ProductCreateSerializer(serializers.ModelSerializer):
                 )
             
             # ── AI Agent Trigger (Async) ──────────────────────
-            if auction and uploaded_images:
-                def run_ai_tasks():
+            if auction:
+                if product.detected_item:
+                    logger.info(f"[Agent] 🤖 Product {product.id} already has detected_item '{product.detected_item}' from frontend. Triggering auto-bidding immediately...")
                     try:
-                        first_image = product.images.filter(is_primary=True).first()
-                        if not first_image or not first_image.image:
-                            return
-
+                        from .tasks import run_auto_bidding_celery
+                        run_auto_bidding_celery.delay(auction.id, product.detected_item)
+                    except Exception:
+                        run_auto_bidding_async(auction.id, product.detected_item)
+                elif uploaded_images:
+                    def run_ai_tasks():
                         try:
-                            image_path = first_image.image.path
-                        except NotImplementedError:
-                            image_path = first_image.image.url
-                            
-                        from ai.classifier import classify_image, guess_item_from_text
-                        logger.info(f"[Agent] 🤖 Starting background classification for product {product.id}...")
-                        result = classify_image(image_path)
-                        detected_item = result.get('detected_class')
-                        
-                        # Fallback: Guess from text if image classification fails
-                        if not detected_item:
-                            logger.info(f"[Agent] ⚠️ Image detection failed for {product.id}, trying text guess...")
-                            detected_item = guess_item_from_text(product.title)
+                            first_image = product.images.filter(is_primary=True).first()
+                            if not first_image or not first_image.image:
+                                return
 
-                        if detected_item:
-                            product.detected_item = detected_item
-                            product.save(update_fields=['detected_item'])
-                            logger.info(f"[Agent] 🔍 Identified as '{detected_item}' — triggering agents...")
-                            
-                            # Trigger auto-bidding
                             try:
-                                from .tasks import run_auto_bidding_celery
-                                run_auto_bidding_celery.delay(auction.id, detected_item)
-                            except Exception:
-                                run_auto_bidding_async(auction.id, detected_item)
-                        else:
-                            logger.warning(f"[Agent] ❌ Could not identify product {product.id} (image/text)")
-                    except Exception as e:
-                        logger.error(f"[Agent] Background AI error: {e}")
-                    finally:
-                        from django.db import connection
-                        connection.close()
+                                image_path = first_image.image.path
+                            except NotImplementedError:
+                                image_path = first_image.image.url
+                                
+                            from ai.classifier import classify_image, guess_item_from_text
+                            logger.info(f"[Agent] 🤖 Starting background classification for product {product.id}...")
+                            result = classify_image(image_path)
+                            detected_item = result.get('detected_class')
+                            
+                            # Fallback: Guess from text if image classification fails
+                            if not detected_item:
+                                logger.info(f"[Agent] ⚠️ Image detection failed for {product.id}, trying text guess...")
+                                detected_item = guess_item_from_text(product.title)
 
-                # Launch in thread so response is sent immediately
-                threading.Thread(target=run_ai_tasks, daemon=True).start()
+                            if detected_item:
+                                product.detected_item = detected_item
+                                product.save(update_fields=['detected_item'])
+                                logger.info(f"[Agent] 🔍 Identified as '{detected_item}' — triggering agents...")
+                                
+                                # Trigger auto-bidding
+                                try:
+                                    from .tasks import run_auto_bidding_celery
+                                    run_auto_bidding_celery.delay(auction.id, detected_item)
+                                except Exception:
+                                    run_auto_bidding_async(auction.id, detected_item)
+                            else:
+                                logger.warning(f"[Agent] ❌ Could not identify product {product.id} (image/text)")
+                        except Exception as e:
+                            logger.error(f"[Agent] Background AI error: {e}")
+                        finally:
+                            from django.db import connection
+                            connection.close()
+
+                    # Launch in thread so response is sent immediately
+                    threading.Thread(target=run_ai_tasks, daemon=True).start()
             # ──────────────────────────────────────────────────
             
             return product

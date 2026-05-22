@@ -177,7 +177,7 @@ _KEYWORD_MAP = {
     'غساله': 'washing_machine', 'غسال': 'washing_machine', 'اوتوماتيك': 'washing_machine',
     'ثلاجه': 'fridge', 'تلاجه': 'fridge',
     'بوتاجاز': 'cooker', 'فرن': 'cooker',
-    'ميكروويف': 'microwave',
+    'ميكروويف': 'microwave', 'ميكرويف': 'microwave', 'ميكروف': 'microwave', 'مكرويف': 'microwave', 'مكروويف': 'microwave',
     'خلاط': 'blender',
     'تكييف': 'ac_unit', 'تكيف': 'ac_unit',
     'مروحه': 'fan',
@@ -337,13 +337,25 @@ def classify_image(image_path: str) -> dict:
     logger.info(f"[AI] Using HF Space: {hf_space_url}")
 
     is_url = image_path.startswith(("http://", "https://"))
+    temp_path = None
 
     try:
         # ── Step 1: Prepare image payload ──
         if is_url:
-            image_data = {"url": image_path, "meta": {"_type": "gradio.FileData"}}
-            logger.info(f"[AI] Sending URL: {image_path[:80]}...")
-        else:
+            try:
+                logger.info(f"[AI] Downloading image URL: {image_path}")
+                resp = requests.get(image_path, timeout=30)
+                resp.raise_for_status()
+                import tempfile
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+                    tmp.write(resp.content)
+                    temp_path = tmp.name
+                image_path = temp_path
+                is_url = False
+            except Exception as e:
+                logger.error(f"[AI] Failed to download image URL {image_path}: {e}")
+
+        if not is_url:
             upload_url = f"{hf_space_url}/gradio_api/upload"
             filename  = os.path.basename(image_path)
             mime_type = mimetypes.guess_type(filename)[0] or "image/jpeg"
@@ -366,6 +378,9 @@ def classify_image(image_path: str) -> dict:
             uploaded_path = uploaded_files[0]
             logger.info(f"[AI] Uploaded to HF Space: {uploaded_path}")
             image_data = {"path": uploaded_path, "meta": {"_type": "gradio.FileData"}}
+        else:
+            image_data = {"url": image_path, "meta": {"_type": "gradio.FileData"}}
+            logger.info(f"[AI] Sending URL: {image_path[:80]}...")
 
         # ── Step 2: Submit prediction ──
         predict_resp = requests.post(
@@ -452,3 +467,10 @@ def classify_image(image_path: str) -> dict:
     except Exception as e:
         logger.exception(f"HF Space inference error: {e}")
         return _FALLBACK
+    finally:
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.unlink(temp_path)
+                logger.info(f"[AI] Cleaned up temporary image file {temp_path}")
+            except Exception as e:
+                logger.warning(f"[AI] Failed to clean up temp image file {temp_path}: {e}")

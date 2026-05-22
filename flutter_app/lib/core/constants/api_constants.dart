@@ -8,7 +8,7 @@ class ApiConstants {
     'API_BASE_URL',
     // Use http://10.0.2.2:8000 for Android Emulator
     // Use http://localhost:8000 for iOS Simulator / Web
-    defaultValue: 'https://4-sale-app.vercel.app/api/v1',
+    defaultValue: 'http://10.0.2.2:8000/api/v1',
   );
 
   // ── Auth ──────────────────────────────────────────────────────

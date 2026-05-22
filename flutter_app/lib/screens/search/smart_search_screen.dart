@@ -652,27 +652,39 @@ class _SmartSearchScreenState extends ConsumerState<SmartSearchScreen> {
                 borderRadius: BorderRadius.circular(24.r),
                 border: Border.all(color: AppColors.slate200),
               ),
-              child: TextField(
-                controller: _inputCtrl,
-                minLines: 1,
-                maxLines: 4,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _send(),
-                style: TextStyle(
-                    fontSize: 14.sp,
-                    color: AppColors.slate900,
-                    fontWeight: FontWeight.w500),
-                decoration: InputDecoration(
-                  hintText: isAr
-                      ? 'اسأل عن أي منتج...'
-                      : 'Ask about any product...',
-                  hintStyle: TextStyle(
-                      color: AppColors.slate400,
+              // Workaround for Flutter bug: VerticalCaretMovementRun.moveNext()
+              // crashes when Arrow Up/Down is pressed in a minLines:1/maxLines:N
+              // TextField that has only a single line of content.
+              // See: https://github.com/flutter/flutter/issues
+              child: Shortcuts(
+                shortcuts: const {
+                  SingleActivator(LogicalKeyboardKey.arrowDown):
+                      DoNothingAndStopPropagationTextIntent(),
+                  SingleActivator(LogicalKeyboardKey.arrowUp):
+                      DoNothingAndStopPropagationTextIntent(),
+                },
+                child: TextField(
+                  controller: _inputCtrl,
+                  minLines: 1,
+                  maxLines: 4,
+                  textInputAction: TextInputAction.send,
+                  onSubmitted: (_) => _send(),
+                  style: TextStyle(
                       fontSize: 14.sp,
-                      fontWeight: FontWeight.w400),
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 18.w, vertical: 12.h),
-                  border: InputBorder.none,
+                      color: AppColors.slate900,
+                      fontWeight: FontWeight.w500),
+                  decoration: InputDecoration(
+                    hintText: isAr
+                        ? 'اسأل عن أي منتج...'
+                        : 'Ask about any product...',
+                    hintStyle: TextStyle(
+                        color: AppColors.slate400,
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w400),
+                    contentPadding:
+                        EdgeInsets.symmetric(horizontal: 18.w, vertical: 12.h),
+                    border: InputBorder.none,
+                  ),
                 ),
               ),
             ),
